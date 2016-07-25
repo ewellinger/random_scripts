@@ -144,6 +144,9 @@ def predicted_value_plot(model, df, column, classification=False, discrete_col=F
                 ax2.hist(df[column].values, facecolor=cmap[1], alpha=0.4)
             ax2.set_ylabel('Frequency')
 
+        # Set xlims to mirror the min and max datapoint
+        ax1.set_xlim([x_i.min(), x_i.max()])
+
     # Copy our DataFrame so as not to alter the original data
     dfc = df.copy()
 

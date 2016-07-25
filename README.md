@@ -8,3 +8,7 @@ Script for performing a predicted value plot for a particular feature given a mo
 The following graphic is the resulting plot using the standard Boston dataset included with the scikit-learn library looking at the 'CRIM' feature (per capita crime rate by town).
 
 ![Predicted Values Plot of Column CRIM Using a Random Forest Model](./imgs/regression_predicted_value_plot.png)
+
+The following graphic is the resulting plot when running the `predicted_value_plot` function on a column containing discrete values.  The entire column will be reset to the value of each discrete value and predictions will be made.  The box plot of predictions is then generated from the mean predictions of 1000 bootstrapped samples of those predictions.  There is also an optional parameter for superimposing a jittered scatter plot of bootstrapped means over the box plot.
+
+![Predicted Values Plot of Discrete Column CHAS Using a Random Forest Model](./imgs/regression_discrete_predicted_value_plot.png)
