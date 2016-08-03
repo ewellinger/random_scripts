@@ -2,19 +2,14 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
-import matplotlib
-from cycler import cycler
 from sklearn.utils import resample
-from sklearn.datasets import load_boston
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 
 # Set style options
 plt.style.use('ggplot')
-color_cycle = cycler(color=['#4c72b0', '#55a868', '#c44e52', '#8172b2', '#ccb974', '#64b5cd'])
-matplotlib.rcParams['axes.prop_cycle'] = color_cycle
 
 
-def predicted_value_plot(model, df, column, classification=False, discrete_col=False, freq=True, scatter=True, scatter_num=None, fname=None, num_linspace=100, response_label=None, cmap=('#4c72b0', '#c44e52'), figsize=(8, 6)):
+def predicted_value_plot(model, df, column, classification=False, discrete_col=False, class_col=None, class_labels=None, bin_labels=None, freq=True, scatter=True, ci=True, scatter_num=None, fname=None, num_linspace=100, response_label=None, cmap=None, figsize=(10, 7)):
     ''' Makes predicted values/probability plot for a given feature
     INPUT:
         model: Trained model that implements a .predict() or, in the case of classification problems, .predict_proba() methods
@@ -44,13 +39,24 @@ def predicted_value_plot(model, df, column, classification=False, discrete_col=F
             Tuple of colors dictating the primary and secondary colors of the plot.  Any Matplotlib accepted color values can be passed.
         figsize: tuple (int, int)
             Size of figure in inches
+
+
+        class_labels: list, np.ndarray, or dict
+        ci: bool
+        class_col: int
+        bin_labels: dict
+
+    Possible parameters to add:
+        - Ability to turn off confidence interval in the case of a continuous column
+        - label list in the case of a multiclass classification
+        - Ability to specify a particular class in a multiclass classification setting
     '''
     def _rand_jitter(arr, box):
         left_x, right_x = box.get_xdata()[0], box.get_xdata()[1]
-        stdev = .25*(right_x - left_x)
+        stdev = .18*(right_x - left_x)
         return arr + np.random.randn(len(arr)) * stdev
 
-    def _discrete_value_plot(scatter_num):
+    def _discrete_value_plot(scatter_num, bin_labels):
         # Create an array of the unique discrete bins
         labels = np.unique(dfc[column])
 
@@ -66,10 +72,7 @@ def predicted_value_plot(model, df, column, classification=False, discrete_col=F
                 pred = model.predict(dfc)
 
             # Append array of means of bootstrapped predictions
-            preds.append(np.array([boot_sample.mean() for boot_sample in (resample(pred) for _ in xrange(1000))]).reshape(-1, 1))
-
-        # Probably do this irrespective of discrete vs contin
-        # fig, ax1 = plt.subplots(figsize=figsize)
+            preds.append(np.array([boot_sample.mean() for boot_sample in (resample(pred) for _ in xrange(1000))]).reshape(1, -1))
 
         # Create the boxplots for each label and alter colors
         bp = plt.boxplot(preds, sym='', whis=[5,95], labels=labels) #, widths=0.35)
@@ -85,15 +88,18 @@ def predicted_value_plot(model, df, column, classification=False, discrete_col=F
             ax1.add_patch(boxPolygon)
 
         # Set the xtick labels
-        xtickNames = plt.setp(ax1, xticklabels=labels)
+        if not isinstance(bin_labels, dict):
+            bin_labels = {}
+
+        xtickNames = plt.setp(ax1, xticklabels=[bin_labels.get(label, label) for label in labels])
         plt.setp(xtickNames, rotation=-45, fontsize=10)
 
         # Superimpose jittered scatter plot if scatter is set to True
         if scatter:
             # If the number of points to plot was not set with scatter_num
-            # Set the number to 200 * the number of discrete bins
+            # Set the number to 125 * the number of discrete bins
             if not scatter_num:
-                scatter_num = 200 * len(labels)
+                scatter_num = 125 * len(labels)
             # Make the number of points per bin perportional to that labels
             # representation in the original dataset
             num_per_label = [int((df[column] == label).mean() * scatter_num) for label in labels]
@@ -103,13 +109,16 @@ def predicted_value_plot(model, df, column, classification=False, discrete_col=F
                 jittered_x = _rand_jitter(x_data, bp['boxes'][idx])
                 ax1.scatter(jittered_x, y_data, c=cmap[1], alpha=0.6)
 
+
+
+
     def _contin_value_plot():
         # We need to set up an array of x_i values to search over
         if num_linspace:
             # Create an interval over +-1 std of the mean of the x column
             mean, std = df[column].mean(), df[column].std()
-            lower = np.max([mean-std, df[column].min()])
-            upper = np.min([mean+std, df[column].max()])
+            lower = np.max([mean-1.5*std, df[column].min()])
+            upper = np.min([mean+1.5*std, df[column].max()])
             x_i = np.linspace(lower, upper, num=num_linspace)
         else:
             # If num_linspace=None, make x_i the unique values
@@ -121,40 +130,75 @@ def predicted_value_plot(model, df, column, classification=False, discrete_col=F
         for val in x_i:
             dfc[column] = val
             if classification:
-                pred = model.predict_proba(dfc)[:, 1]
+                pred = model.predict_proba(dfc)
+                preds.append(np.array([boot_sample.mean(axis=0) for boot_sample in (resample(pred) for _ in xrange(1000))]).reshape(-1, pred.shape[1]))
             else:
                 pred = model.predict(dfc)
+                preds.append(np.array([boot_sample.mean() for boot_sample in (resample(pred) for _ in xrange(1000))]).flatten())
 
-            preds.append([boot_sample.mean() for boot_sample in (resample(pred) for _ in xrange(1000))])
         probs = np.array(preds)
+
+        # Subset down to a particular class if class_col is set
+        if classification and class_col:
+            probs = probs[:, :, class_col]
+
         prob_means = probs.mean(axis=1)
         lower_bounds = np.percentile(probs, q=10, axis=1)
         upper_bounds = np.percentile(probs, q=90, axis=1)
 
-        # Create the fill to indicate the confidence bounds
-        ax1.fill_between(x_i, lower_bounds, upper_bounds, facecolor=cmap[0], alpha=0.25)
-        # Plot the predictions
-        ax1.plot(x_i, prob_means, c=cmap[1], linewidth=2)
+        # If probs.shape == 2 then we only need one line and confidence interval
+        if len(probs.shape) == 2:
+            # Create the fill to indicate the confidence bounds
+            if ci:
+                ax1.fill_between(x_i, lower_bounds, upper_bounds, facecolor=cmap[0], alpha=0.2)
+            # Plot the predictions
+            ax1.plot(x_i, prob_means, c=cmap[0], linewidth=2)
+        else:
+            for col_idx in xrange(probs.shape[2]):
+                if ci:
+                    ax1.fill_between(x_i, lower_bounds[:, col_idx], upper_bounds[:, col_idx], facecolor=cmap[col_idx], alpha=0.2)
+                ax1.plot(x_i, prob_means[:, col_idx], c=cmap[col_idx], linewidth=2, label=class_labels.get(col_idx, col_idx))
+                ax1.legend(loc='best')
 
         if freq:
             ax2 = ax1.twinx()
-            if num_linspace:
-                ax2.hist(df.loc[(df[column] >= mean-std) & (df[column] <= mean+std), column].values, facecolor=cmap[1], alpha=0.4)
+
+            # Set the color of the histogram to be distinct from any of the lines
+            if len(probs.shape) == 2:
+                freq_color = cmap[1]
             else:
-                ax2.hist(df[column].values, facecolor=cmap[1], alpha=0.4)
+                freq_color = cmap[probs.shape[2] + 1]
+
+            if num_linspace:
+                ax2.hist(df.loc[(df[column] >= mean-1.5*std) & (df[column] <= mean+1.5*std), column].values, facecolor=freq_color, alpha=0.4)
+            else:
+                ax2.hist(df[column].values, facecolor=freq_color, alpha=0.4)
             ax2.set_ylabel('Frequency')
 
         # Set xlims to mirror the min and max datapoint
         ax1.set_xlim([x_i.min(), x_i.max()])
 
+
     # Copy our DataFrame so as not to alter the original data
     dfc = df.copy()
+
+    # If dealing with classification model set up class_labels
+    if isinstance(class_labels, dict):
+        pass
+    elif isinstance(class_labels, (list, np.ndarray)):
+        class_labels = {idx: label for idx, label in enumerate(class_labels)}
+    else:
+        class_labels = {}
+
+    # Configure cmap if none is provided using Tableau's categorical colors
+    if cmap == None:
+        cmap = ['#4d79a8', '#e15759', '#f28e2b', '#76b7b2', '#59a14e', '#edc948', '#b07aa2', '#ff9da8', '#9c755f', '#bab0ac']
 
     # Create our Matplotlib figure and axis objects
     fig, ax1 = plt.subplots(figsize=figsize)
 
     if discrete_col:
-        _discrete_value_plot(scatter_num)
+        _discrete_value_plot(scatter_num, bin_labels)
     else:
         _contin_value_plot()
 
@@ -179,31 +223,61 @@ def predicted_value_plot(model, df, column, classification=False, discrete_col=F
 
 
 if __name__=='__main__':
-    boston = load_boston()
-    y = boston.target  # House prices
-    X = boston.data  # The other 13 features
-    col_names = boston.feature_names
-    df = pd.DataFrame(X, columns=col_names)
+    ''' Run predictd values plot on regression model '''
+    # Read in diamonds dataset
+    # See http://docs.ggplot2.org/0.9.3.1/diamonds.html for more info
+    df = pd.read_csv('./toy_data/diamonds.csv')
 
-    rf = RandomForestRegressor(n_estimators=500)
+    # Randomly sample 10000 datapoints to make confidence intervals more visible
+    df = df.sample(n=10000, random_state=42)
+
+    # Get dummies of some categorical columns
+    df = pd.get_dummies(df, columns=['color', 'clarity'], drop_first=True)
+
+    # Convert cut to int value
+    cut_map = {'Fair': 0, 'Good': 1, 'Very Good': 2, 'Premium': 3, 'Ideal': 4}
+    df['cut'] = df['cut'].map(lambda x: cut_map[x])
+
+    # Make regression model using 'price' column as target
+    y = df.pop('price').values
+    X = df.values
+
+    rf = RandomForestRegressor(n_estimators=100)
     rf.fit(X, y)
 
-    predicted_value_plot(rf, df, 'CRIM', response_label="Predicted Median Value of Homes in $1,000's", fname='./imgs/regression_predicted_value_plot')
-    plt.clf()
+    # Run on a continous column
+    predicted_value_plot(rf, df, 'carat', response_label="Predicted Price in U.S. Dollars", fname='./imgs/regression_predicted_value_plot')
 
-    predicted_value_plot(rf, df, 'CHAS', response_label="Predicted Median Value of Homes in $1,000's", discrete_col=True)
-    plt.xlabel('Charles River Property')
-    plt.savefig('./imgs/regression_discrete_predicted_value_plot.png', dpi=300)
+    # Run on a discrete column
+    bin_labels = {v: k for k, v in cut_map.iteritems()}
+    predicted_value_plot(rf, df, 'cut', response_label="Predicted Price in U.S. Dollars", discrete_col=True, bin_labels=bin_labels, fname='./imgs/regression_discrete_predicted_value_plot')
 
 
-    # # Plot of regression model for continuous column with frequency overlaid
-    # predicted_value_plot(rf, df, 'CRIM')
-    #
-    # # Plot of regression model for continuous column w/o frequency overlaid
-    # predicted_value_plot(rf, df, 'CRIM', freq=False)
-    #
-    # # Plot of regression model for discrete column with scatter overlaid
-    # predicted_value_plot(rf, df, 'CHAS', discrete_col=True)
-    #
-    # # Plot of regression model for discrete column w/o scatter overlaid
-    # predicted_value_plot(rf, df, 'CHAS', discrete_col=True, scatter=False)
+    ''' Run predicted values plot on classification model '''
+
+    # Reread in the dataframe
+    df = pd.read_csv('./toy_data/diamonds.csv')
+
+    # Subset down to 'Very Good' cut or above
+    # df = df.loc[df['cut'].isin(['Ideal', 'Premium', 'Very Good']), :]
+
+    # Map cut to integer label
+    cut_map = cut_map = {'Fair': 0, 'Good': 1, 'Very Good': 2, 'Premium': 3, 'Ideal': 4}
+    class_labels = {v: k for k, v in cut_map.iteritems()}
+    df['cut'] = df['cut'].map(lambda x: cut_map[x])
+
+    # Balance our classes so there are 2000 datapoints per cut class
+    df = pd.concat([df.loc[df['cut'] == label].sample(n=2000, replace=True, random_state=42) for label in df['cut'].unique()], ignore_index=True)
+
+    # Get dummies of some categorical columns
+    df = pd.get_dummies(df, columns=['color', 'clarity'], drop_first=True)
+
+    # Make classification model using 'cut' column as target
+    y = df.pop('cut').values
+    X = df.values
+
+    rf = RandomForestClassifier(n_estimators=100)
+    rf.fit(X, y)
+
+    # Run on a continous column
+    predicted_value_plot(rf, df, 'price', classification=True, class_labels=class_labels, fname='./imgs/classification_predicted_prob_plot')
