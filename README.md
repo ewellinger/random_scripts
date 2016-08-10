@@ -23,3 +23,9 @@ Using the same dataset as before, we can build a Random Forest Classifier to pre
 
 
 **NOTE**: This function is still under active development.  Work is being done to extend the function's ability to have a multi-class classification model create a plot for a discrete column with grouped box plots.  Stay tuned!
+
+
+## Sync Data With S3
+Script for keeping data in sync with an S3 bucket.  Useful for keeping data too large for GitHub in sync with a particular S3 bucket by comparing local files to the remote versions to see if the file has changed (using the md5 hash) and re-download accordingly.  Any local files in the chosen directory that aren't contained on S3 will be deleted.  
+
+The end result will be an exact reflection of the state of your S3 bucket.
