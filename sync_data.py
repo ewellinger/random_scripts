@@ -8,24 +8,31 @@ secret_access_key = os.environ["AWS_SECRET_ACCESS_KEY"]
 
 def sync_data_with_s3(path, bucket):
     '''
-    Purpose of this funcion is to update the data files with those saved on S3.  Files will only be downloaded if they have changed or are not contained in the local path
+    Purpose of this funcion is to update the data files with those saved on
+    S3.  Files will only be downloaded if they have changed or are not
+    contained in the local path
     '''
-    # First we need to delete all files that are currently present in the path including all files imbedded in folders
+    # First ensure that the path exists and make it if not
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+    # Create a list of all files that are present in path including those
+    # present in subdirectories
     files = []
     for dirname, dirnames, filenames in os.walk(path):
         files.extend([os.path.join(dirname, f) for f in filenames])
     files = [f.replace(path, '', 1)[1:] for f in files]
 
-    # Make dictionary of local files with file name as the key and a tuple
-    # containing bool value indicating whether the file is on S3 and the md5
-    # hash of the file
+    # Make dictionary of local files with file name as the key and a list
+    # containing bool value indicating whether the file is on S3 (set to False
+    # initially) and the md5 hash of the file
     local_fdict = {f: [False, md5(os.path.join(path, f))] for f in files}
 
     # Create connection to s3 and connect to the bucket
     conn = boto.connect_s3(access_key, secret_access_key)
     b = conn.get_bucket(bucket)
 
-    # Download every file in the bucket to the specified path
+    # Loop through every key in the bucket
     for key in b.list():
         # Make sure subfolders exist, if necessary
         copy_filestructure(path, key)
@@ -34,6 +41,7 @@ def sync_data_with_s3(path, bucket):
         if key.name in local_fdict:
             local_fdict[key.name][0] = True
 
+        # Determine whether the file should be downloaded
         download = check_file(key, local_fdict)
 
         # Delete file if it's present, but has changed
@@ -45,11 +53,11 @@ def sync_data_with_s3(path, bucket):
         else:
             print 'File {} unchanged, skipping...'.format(key.name)
 
+    # Remove files from local if not present on S3
     for k, v in local_fdict.iteritems():
         if not v[0]:
             print 'Removing {}...'.format(k)
             os.remove(os.path.join(path, k))
-
     print 'Sync Complete'
 
 
@@ -71,6 +79,7 @@ def check_file(key, local_fdict):
 
 
 def md5(fname):
+    ''' Calculate the md5 hash of local file '''
     hash_md5 = hashlib.md5()
     with open(fname, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
@@ -90,10 +99,7 @@ def copy_filestructure(path, key):
 if __name__=='__main__':
     # Indicate where the contents of the S3 Bucket should go
     path = './data'
+    # Indicate the name of the bucket to look to
     bucket = 'ewellingertesttest'
-
-    # First ensure that the path exists
-    if not os.path.exists(path):
-        os.makedirs(path)
 
     sync_data_with_s3(path, bucket)
