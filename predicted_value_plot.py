@@ -66,6 +66,36 @@ def predicted_value_plot(model, df, column, classification=False, discrete_col=F
         figsize: tuple (int, int)
             Size of figure in inches
     '''
+    def _validate_inputs(class_labels, cmap):
+        # Verify that model implements .predict()/.predict_proba()
+        if classification and not hasattr(model, 'predict_proba'):
+            raise TypeError("'model' object must implement the predict_proba() method if classification=True")
+        elif not hasattr(model, 'predict'):
+            raise TypeError("'model' object must implement the predict() method")
+
+        if column not in df.columns:
+            raise ValueError("'column' must be a column in the passed DataFrame")
+
+        # If set, verify class_col is an integer
+        if not isinstance(class_col, (type(None), int)):
+            raise ValueError("arg 'class_col' must be an int, leaving class_col=None causes all classes to be included")
+
+        # If dealing with classification model set up class_labels
+        if isinstance(class_labels, dict):
+            pass
+        elif isinstance(class_labels, collections.Iterable):
+            class_labels = {idx: label for idx, label in enumerate(class_labels)}
+        else:
+            class_labels = {}
+
+        # Configure cmap if none is provided using Tableau's categorical colors
+        # To properly override these colors you must pass an iterable with valid matplotlib color values
+        if not isinstance(cmap, collections.Iterable):
+            cmap = ['#4d79a8', '#e15759', '#f28e2b', '#76b7b2', '#59a14e', '#edc948', '#b07aa2', '#ff9da8', '#9c755f', '#bab0ac']
+
+        return class_labels, cmap
+
+
     def _rand_jitter(arr, box):
         left_x, right_x = box.get_xdata()[0], box.get_xdata()[1]
         stdev = .17*(right_x - left_x)
@@ -228,7 +258,11 @@ def predicted_value_plot(model, df, column, classification=False, discrete_col=F
             if ci:
                 ax1.fill_between(x_i, lower_bounds, upper_bounds, facecolor=cmap[0], alpha=0.2)
             # Plot the predictions
-            ax1.plot(x_i, pred_means, c=cmap[0], linewidth=2)
+            if classification and class_col:
+                ax1.plot(x_i, pred_means, c=cmap[0], linewidth=2, label=class_labels.get(class_col, 'Class {}'.format(class_col)))
+                ax1.legend(loc='best')
+            else:
+                ax1.plot(x_i, pred_means, c=cmap[0], linewidth=2)
         else:
             for col_idx in xrange(preds.shape[2]):
                 if ci:
@@ -255,35 +289,10 @@ def predicted_value_plot(model, df, column, classification=False, discrete_col=F
         ax1.set_xlim([x_i.min(), x_i.max()])
 
 
+    class_labels, cmap = _validate_inputs(class_labels, cmap)
+
     # Copy our DataFrame so as not to alter the original data
     dfc = df.copy()
-
-    # Verify that model implements .predict()/.predict_proba()
-    if classification and not hasattr(model, 'predict_proba'):
-        raise TypeError("'model' object must implement the predict_proba() method if classification=True")
-    elif not hasattr(model, 'predict'):
-        raise TypeError("'model' object must implement the predict() method")
-
-    if column not in df.columns:
-        raise ValueError("'column' must be a column in the passed DataFrame")
-
-    # If set, verify class_col is an integer
-    if not isinstance(class_col, (type(None), int)):
-        raise ValueError("arg 'class_col' must be an int, leaving class_col=None causes all classes to be included")
-
-
-    # If dealing with classification model set up class_labels
-    if isinstance(class_labels, dict):
-        pass
-    elif isinstance(class_labels, collections.Iterable):
-        class_labels = {idx: label for idx, label in enumerate(class_labels)}
-    else:
-        class_labels = {}
-
-    # Configure cmap if none is provided using Tableau's categorical colors
-    # To properly override these colors you must pass an iterable with valid matplotlib color values
-    if not isinstance(cmap, collections.Iterable):
-        cmap = ['#4d79a8', '#e15759', '#f28e2b', '#76b7b2', '#59a14e', '#edc948', '#b07aa2', '#ff9da8', '#9c755f', '#bab0ac']
 
     # Create our Matplotlib figure and axis objects
     fig, ax1 = plt.subplots(figsize=figsize)
@@ -339,7 +348,6 @@ if __name__=='__main__':
 
 
     ''' Run predicted values plot on classification model '''
-
     # Reread in the dataframe
     df = pd.read_csv('./toy_data/diamonds.csv')
 
