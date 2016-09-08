@@ -19,7 +19,7 @@ This function accommodates classification models to produce predicted probabilit
 
 Using the same dataset as before, we can build a Random Forest Classifier to predict the `cut` of a diamond.  The following graphic identifies how different values of `price` affect the model's `cut` prediction.
 
-![Predicted Probability Plot of Column price Using a Random Forest Classifier](./imgs/classification_predicted_prob_plot.png)
+![Predicted Probability Plot of Column price Using a Random Forest Classifier](./imgs/classification_continuous_predicted_prob_plot.png)
 
 
 **NOTE**: This function is still under active development.  Work is being done to extend the function's ability to have a multi-class classification model create a plot for a discrete column with grouped box plots.  Stay tuned!
