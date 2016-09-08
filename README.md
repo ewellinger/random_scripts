@@ -21,8 +21,13 @@ Using the same dataset as before, we can build a Random Forest Classifier to pre
 
 ![Predicted Probability Plot of Column price Using a Random Forest Classifier](./imgs/classification_continuous_predicted_prob_plot.png)
 
+We can also take a look at a discrete column to see how changing that value affects the predicted probabilities of each of our classes.
 
-**NOTE**: This function is still under active development.  Work is being done to extend the function's ability to have a multi-class classification model create a plot for a discrete column with grouped box plots.  Stay tuned!
+![Predicted Probability Plot of Column color_E Using a Random Forest Classifier](./imgs/classification_discrete_predicted_prob_plot1.png)
+
+But maybe we don't want to look at the predicted probability for every class and just want to hone in on a particular class.  We can easily do this by passing in a index to the `class_col` argument.
+
+![Predicted Probability Plot of Column color_E Looking Only At The 'Good' Class](./imgs/classification_discrete_predicted_prob_plot2.png)
 
 
 ## Sync Data With S3
