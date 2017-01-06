@@ -34,3 +34,16 @@ But maybe we don't want to look at the predicted probability for every class and
 Script for keeping data in sync with an S3 bucket.  Useful for keeping data too large for GitHub in sync with a particular S3 bucket by comparing local files to the remote versions to see if the file has changed (using the md5 hash) and re-download accordingly.  Any local files in the chosen directory that aren't contained on S3 will be deleted.  
 
 The end result will be an exact reflection of the state of your S3 bucket.
+
+
+## Permuted Coefficient Significance
+
+This script is a nice alternative way of calculating p-values for particular beta coefficients in Linear Regression.  It will permute the target values and create a 'null' coefficient a number of times to compare how your original coefficient compares.
+
+The following is an example of a feature that is extremely significant:
+
+![Permuted Coefficient Significance of 'carat'](./imgs/carat_permutation_significance_plot.png)
+
+The following is an example of a feature that should be dropped from the model due to a high p-value:
+
+![Permuted Coefficient Significance of 'depth'](./imgs/depth_permutation_significance_plot.png)

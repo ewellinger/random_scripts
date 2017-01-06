@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
 plt.style.use('ggplot')
 
 
@@ -34,6 +35,7 @@ def permutation_significance(model, X, y, X_idx=None, num=1000):
         coefs.append(model.coef_)
     return np.array(coefs)[:, X_idx] if X_idx is not None else np.array(coefs)
 
+
 def permutation_significance_plot(model, X, y, X_idx, label=None):
     '''
     Create a permutation plot and calculates a p-value for a particular
@@ -63,3 +65,32 @@ def permutation_significance_plot(model, X, y, X_idx, label=None):
     plt.title('Permuted Coefficient Significance Plot')
     plt.xlabel(r"{}: $\beta$={:.3}, $p$={:.3}".format(label, original_coef, prob))
     return ax
+
+
+if __name__=='__main__':
+    # Read in diamonds dataset
+    # See http://docs.ggplot2.org/0.9.3.1/diamonds.html for more info
+    df = pd.read_csv('./toy_data/diamonds.csv')
+
+    # Let's drop the categorical variables for simplicity
+    df.drop(['cut', 'color', 'clarity'], axis=1, inplace=True)
+
+    # Pop off price for the target
+    y = df.pop('price').values
+    X = df.values
+
+    # Initialize our LinearRegression and fit it
+    lr = LinearRegression()
+    lr.fit(X, y)
+
+    # Create permutation significance plot for the 'carat' feature
+    permutation_significance_plot(lr, X, y, 0, 'carat')
+
+    # Save the figure
+    plt.savefig('./imgs/carat_permutation_significance_plot.png', dpi=300)
+
+    # Create permutation significance plot for the 'depth' feature
+    permutation_significance_plot(lr, X, y, 1, 'depth')
+
+    # Save the figure
+    plt.savefig('./imgs/depth_permutation_significance_plot.png', dpi=300)
