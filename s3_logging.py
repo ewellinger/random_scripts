@@ -65,7 +65,10 @@ class S3Logging(object):
             self.push_log()
 
     def push_log(self):
-        f_handle = StringIO(self._msg)
+        if sys.version_info.major < 3:
+            f_handle = StringIO(unicode(self._msg))
+        else:
+            f_handle = StringIO(self._msg)
         self._s3.put_object(Bucket=self.bucket, Key=fname, Body=f_handle.read())
 
     def _exists(self):
